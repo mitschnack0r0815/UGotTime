@@ -1,0 +1,29 @@
+## Interface: 16001
+## Title: U Got Time
+## Notes: Workout reminders when you fly and every few quests
+## Author: You
+## Version: 1.0
+## SavedVariables: UGotTimeStats, UGotTimeSettings
+## SavedVariablesPerCharacter: UGotTimeDB
+
+# Core: settings, data and rules (no UI)
+Core\Config.lua
+Core\Settings.lua
+Core\Workouts.lua
+Core\Stats.lua
+Core\Levels.lua
+Core\Announce.lua
+
+# UI
+UI\Window.lua
+UI\XPBar.lua
+UI\StatsTab.lua
+UI\MovementsTab.lua
+UI\Popup.lua
+UI\MinimapButton.lua
+
+# Triggers: when popups show up
+Triggers\Flight.lua
+Triggers\Quests.lua
+
+Core\Commands.lua
