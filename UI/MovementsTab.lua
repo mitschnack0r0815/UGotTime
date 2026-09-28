@@ -1,29 +1,16 @@
 local _, ns = ...
+local Book = ns.Book
 
--- Movements tab (/ugt config): XP bar toggle, enable/disable, delete and add workouts
-local ROW_HEIGHT = 24
-local ROWS_TOP = -76 -- y offset of the first workout row
-local ADD_HEIGHT = 80 -- height of the "Add workout" section below the list
+-- Movements tab (/ugt config). Left page: the movements as spellbook entries; click one to
+-- enable or disable it, with buttons to edit its XP or delete it. Right page: XP bar toggle
+-- and adding workouts.
+local CONTENT_X = Book.PAGE_MARGIN + 12 -- left edge of page content, lined up with the headers
 
 local panel, tabIndex = ns.AddTab("Movements")
+local left, right = panel.left, panel.right
 
--- Show/hide the always visible XP bar (the one in the Stats tab always shows)
-local xpBarCheck = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-xpBarCheck:SetSize(24, 24)
-xpBarCheck:SetPoint("TOPLEFT", 14, -24)
-xpBarCheck:SetScript("OnClick", function(self)
-	ns.SetXPBarShown(self:GetChecked() and true or false)
-end)
-
-local xpBarLabel = xpBarCheck:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-xpBarLabel:SetPoint("LEFT", xpBarCheck, "RIGHT", 4, 0)
-xpBarLabel:SetText("Show XP bar")
-
-local hint = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-hint:SetPoint("TOPLEFT", 16, -58)
-hint:SetText("Which movements can the popup pick?")
-
-local Refresh -- defined below, rows and buttons call it after changes
+local Refresh -- defined below, entries and buttons call it after changes
+local page = 1
 
 StaticPopupDialogs["UGOTTIME_DELETE_WORKOUT"] = {
 	text = "Delete workout \"%s\"?",
@@ -81,99 +68,139 @@ local function IsLastEnabled(key)
 	return ns.IsExerciseEnabled(key) and #ns.GetEnabledExercises() <= 1
 end
 
--- One row per workout: checkbox, name, XP per rep, edit XP and delete buttons.
--- Rows are reused between refreshes.
-local rows = {}
+---------------------------------------------------------------------------
+-- Left page: movement entries
+---------------------------------------------------------------------------
 
-local function GetRow(i)
-	if rows[i] then
-		return rows[i]
+Book.CreateHeader(left, "Movements")
+
+local hint = Book.CreateText(left, Book.SMALL_FONT)
+hint:SetPoint("TOPLEFT", CONTENT_X, -94)
+hint:SetAlpha(0.8)
+hint:SetText("Click a movement to turn it on or off for the popup.")
+
+local listArea = CreateFrame("Frame", nil, left)
+listArea:SetPoint("TOPLEFT", CONTENT_X, -122)
+listArea:SetPoint("BOTTOMRIGHT", -Book.PAGE_MARGIN, 70)
+
+local pager = Book.CreatePager(left, function(delta)
+	page = page + delta
+	Refresh()
+end)
+pager:EnableWheel(listArea)
+
+local function ShowEntryTooltip(entry)
+	GameTooltip:SetOwner(entry, "ANCHOR_RIGHT")
+	GameTooltip:AddLine(entry.ex.name)
+	GameTooltip:AddLine(entry.isDisabled and "Click to turn on" or "Click to turn off", 0.7, 0.7, 0.7)
+	GameTooltip:Show()
+end
+
+-- Entries are reused between refreshes
+local entries = {}
+
+local function GetEntry(i)
+	if entries[i] then
+		return entries[i]
 	end
-	local row = CreateFrame("Frame", nil, panel)
-	row:SetHeight(ROW_HEIGHT)
-	row:SetPoint("TOPLEFT", 14, ROWS_TOP - (i - 1) * ROW_HEIGHT)
-	row:SetPoint("RIGHT", panel, "RIGHT", -14, 0)
+	local entry = Book.CreateEntry(listArea, ns.ICON)
+	entry:SetPoint("TOPLEFT", 0, -(i - 1) * Book.ENTRY_HEIGHT)
+	entry:SetPoint("RIGHT")
 
-	row.check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
-	row.check:SetSize(24, 24)
-	row.check:SetPoint("LEFT")
-	row.check:SetScript("OnClick", function(self)
-		local checked = self:GetChecked() and true or false
-		if not checked and IsLastEnabled(row.ex.key) then
-			self:SetChecked(true)
+	entry.delete = CreateFrame("Button", nil, entry, "UIPanelCloseButton")
+	entry.delete:SetSize(24, 24)
+	entry.delete:SetPoint("RIGHT")
+	entry.delete:SetScript("OnClick", function()
+		if IsLastEnabled(entry.ex.key) then
 			print("U Got Time: at least one movement has to stay enabled.")
 			return
 		end
-		ns.SetExerciseEnabled(row.ex.key, checked)
-	end)
-
-	row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	row.label:SetPoint("LEFT", row.check, "RIGHT", 4, 0)
-
-	row.delete = CreateFrame("Button", nil, row, "UIPanelCloseButton")
-	row.delete:SetSize(24, 24)
-	row.delete:SetPoint("RIGHT")
-	row.delete:SetScript("OnClick", function()
-		if IsLastEnabled(row.ex.key) then
-			print("U Got Time: at least one movement has to stay enabled.")
-			return
-		end
-		StaticPopup_Show("UGOTTIME_DELETE_WORKOUT", row.ex.name, nil, row.ex.key)
+		StaticPopup_Show("UGOTTIME_DELETE_WORKOUT", entry.ex.name, nil, entry.ex.key)
 	end)
 
 	-- Pencil/note icon (same as the guild roster's note button)
-	row.editXP = CreateFrame("Button", nil, row)
-	row.editXP:SetSize(16, 16)
-	row.editXP:SetPoint("RIGHT", row.delete, "LEFT", -4, 0)
-	row.editXP:SetNormalTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
-	row.editXP:SetHighlightTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up", "ADD")
-	row.editXP:SetScript("OnClick", function()
-		local dialog = StaticPopup_Show("UGOTTIME_EDIT_XP", row.ex.name, nil, row.ex.key)
+	entry.editXP = CreateFrame("Button", nil, entry)
+	entry.editXP:SetSize(16, 16)
+	entry.editXP:SetPoint("RIGHT", entry.delete, "LEFT", -4, 0)
+	entry.editXP:SetNormalTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
+	entry.editXP:SetHighlightTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up", "ADD")
+	entry.editXP:SetScript("OnClick", function()
+		local dialog = StaticPopup_Show("UGOTTIME_EDIT_XP", entry.ex.name, nil, entry.ex.key)
 		if dialog then
 			-- Prefill with the current value
 			local editBox = dialog.editBox or dialog.EditBox
-			editBox:SetText(ns.GetExerciseXP(row.ex.key))
+			editBox:SetText(ns.GetExerciseXP(entry.ex.key))
 			editBox:HighlightText()
 			editBox:SetFocus()
 		end
 	end)
-	row.editXP:SetScript("OnEnter", function(self)
+	entry.editXP:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:AddLine("Edit XP per rep")
 		GameTooltip:Show()
 	end)
-	row.editXP:SetScript("OnLeave", GameTooltip_Hide)
+	entry.editXP:SetScript("OnLeave", GameTooltip_Hide)
 
-	row.xp = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	row.xp:SetPoint("RIGHT", row.editXP, "LEFT", -4, 0)
+	-- Keep the text clear of the buttons
+	entry.name:SetPoint("RIGHT", entry.editXP, "LEFT", -6, 0)
+	entry.sub:SetPoint("RIGHT", entry.editXP, "LEFT", -6, 0)
 
-	rows[i] = row
-	return row
+	entry:HookScript("OnEnter", ShowEntryTooltip)
+	entry:HookScript("OnLeave", GameTooltip_Hide)
+	entry:SetScript("OnClick", function(self)
+		local enable = not ns.IsExerciseEnabled(self.ex.key)
+		if not enable and IsLastEnabled(self.ex.key) then
+			print("U Got Time: at least one movement has to stay enabled.")
+			return
+		end
+		ns.SetExerciseEnabled(self.ex.key, enable)
+		PlaySound(enable and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+		Refresh()
+		ShowEntryTooltip(self)
+	end)
+
+	entries[i] = entry
+	return entry
 end
 
--- "Add workout" section, moved below the last row on every refresh
-local addSection = CreateFrame("Frame", nil, panel)
-addSection:SetHeight(ADD_HEIGHT)
+---------------------------------------------------------------------------
+-- Right page: options and adding workouts
+---------------------------------------------------------------------------
 
-local addTitle = addSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-addTitle:SetPoint("TOPLEFT", 16, 0)
-addTitle:SetText("Add workout")
+Book.CreateHeader(right, "Options")
 
-local function InputRow(label, y)
-	local text = addSection:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	text:SetPoint("TOPLEFT", 16, y - 4)
-	text:SetText(label)
+-- Show/hide the always visible XP bar (the one in the Stats tab always shows)
+local xpBarCheck = CreateFrame("CheckButton", nil, right, "UICheckButtonTemplate")
+xpBarCheck:SetSize(26, 26)
+xpBarCheck:SetPoint("TOPLEFT", CONTENT_X - 4, -98)
+xpBarCheck:SetScript("OnClick", function(self)
+	ns.SetXPBarShown(self:GetChecked() and true or false)
+end)
 
-	local box = CreateFrame("EditBox", nil, addSection, "InputBoxTemplate")
-	box:SetSize(210, 20)
-	box:SetPoint("TOPLEFT", 80, y)
-	box:SetAutoFocus(false)
-	box:SetScript("OnEscapePressed", box.ClearFocus)
-	return box
-end
+local xpBarLabel = Book.CreateText(xpBarCheck, Book.TEXT_FONT)
+xpBarLabel:SetPoint("LEFT", xpBarCheck, "RIGHT", 4, 0)
+xpBarLabel:SetText("Show XP bar on screen")
 
-local nameBox = InputRow("Name", -20)
+local info = Book.CreateText(right, Book.SMALL_FONT)
+info:SetPoint("TOPLEFT", CONTENT_X, -136)
+info:SetPoint("RIGHT", -Book.PAGE_MARGIN, 0)
+info:SetAlpha(0.8)
+info:SetText(("A workout pops up whenever you take a flight and after every %d quests."):format(ns.QUESTS_PER_WORKOUT))
+
+local addHeader = Book.CreateSubHeader(right, "Add workout")
+addHeader:SetPoint("TOPLEFT", CONTENT_X, -186)
+addHeader:SetPoint("RIGHT", -Book.PAGE_MARGIN, 0)
+
+local nameLabel = Book.CreateText(right, Book.TEXT_FONT)
+nameLabel:SetPoint("TOPLEFT", CONTENT_X, -234)
+nameLabel:SetText("Name")
+
+local nameBox = CreateFrame("EditBox", nil, right, "InputBoxTemplate")
+nameBox:SetSize(220, 22)
+nameBox:SetPoint("LEFT", nameLabel, "LEFT", 60, 0)
+nameBox:SetAutoFocus(false)
 nameBox:SetMaxLetters(30)
+nameBox:SetScript("OnEscapePressed", nameBox.ClearFocus)
 
 local function AddFromInput()
 	local ex, err = ns.AddExercise(nameBox:GetText())
@@ -183,19 +210,20 @@ local function AddFromInput()
 	end
 	nameBox:SetText("")
 	nameBox:ClearFocus()
+	page = math.huge -- jump to the new movement at the end of the list
 	Refresh()
 end
 
 nameBox:SetScript("OnEnterPressed", AddFromInput)
 
-local addButton = CreateFrame("Button", nil, addSection, "UIPanelButtonTemplate")
-addButton:SetSize(90, 22)
-addButton:SetPoint("TOPLEFT", 76, -48)
+local addButton = CreateFrame("Button", nil, right, "UIPanelButtonTemplate")
+addButton:SetSize(100, 24)
+addButton:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", -6, -10)
 addButton:SetText("Add")
 addButton:SetScript("OnClick", AddFromInput)
 
-local restoreButton = CreateFrame("Button", nil, addSection, "UIPanelButtonTemplate")
-restoreButton:SetSize(120, 22)
+local restoreButton = CreateFrame("Button", nil, right, "UIPanelButtonTemplate")
+restoreButton:SetSize(130, 24)
 restoreButton:SetPoint("LEFT", addButton, "RIGHT", 8, 0)
 restoreButton:SetText("Restore defaults")
 restoreButton:SetScript("OnClick", function()
@@ -203,27 +231,36 @@ restoreButton:SetScript("OnClick", function()
 	Refresh()
 end)
 
+---------------------------------------------------------------------------
+
 function Refresh()
 	xpBarCheck:SetChecked(ns.IsXPBarShown())
 
 	local list = ns.GetExercises()
-	for i, ex in ipairs(list) do
-		local row = GetRow(i)
-		row.ex = ex
-		row.label:SetText(ex.name)
-		row.xp:SetText(ns.GetExerciseXP(ex.key) .. " XP")
-		row.check:SetChecked(ns.IsExerciseEnabled(ex.key))
-		row:Show()
-	end
-	for i = #list + 1, #rows do
-		rows[i]:Hide()
-	end
+	local perPage = math.max(1, floor(listArea:GetHeight() / Book.ENTRY_HEIGHT))
+	local numPages = math.max(1, ceil(#list / perPage))
+	page = math.min(math.max(page, 1), numPages)
 
-	local y = ROWS_TOP - #list * ROW_HEIGHT - 12
-	addSection:ClearAllPoints()
-	addSection:SetPoint("TOPLEFT", 0, y)
-	addSection:SetPoint("RIGHT", panel, "RIGHT")
-	ns.SetWindowHeight(-y + ADD_HEIGHT)
+	local first = (page - 1) * perPage
+	for i = 1, perPage do
+		local ex = list[first + i]
+		local entry = GetEntry(i)
+		if ex then
+			local enabled = ns.IsExerciseEnabled(ex.key)
+			entry.ex = ex
+			entry.isDisabled = not enabled
+			entry.name:SetText(ex.name)
+			entry.sub:SetText(enabled and (ns.GetExerciseXP(ex.key) .. " XP per rep") or "Turned off")
+			Book.UpdateEntry(entry)
+			entry:Show()
+		else
+			entry:Hide()
+		end
+	end
+	for i = perPage + 1, #entries do
+		entries[i]:Hide()
+	end
+	pager:Update(page, numPages)
 end
 
 panel:SetScript("OnShow", Refresh)

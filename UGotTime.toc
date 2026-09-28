@@ -15,6 +15,7 @@ Core\Levels.lua
 Core\Announce.lua
 
 # UI
+UI\Book.lua
 UI\Window.lua
 UI\XPBar.lua
 UI\StatsTab.lua

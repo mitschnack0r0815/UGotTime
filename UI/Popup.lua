@@ -1,4 +1,5 @@
 local _, ns = ...
+local Book = ns.Book
 
 local ROW_HEIGHT = 24
 local ROWS_TOP = -70 -- y offset of the first workout row
@@ -37,7 +38,16 @@ popup:SetScript("OnDragStop", popup.StopMovingOrSizing)
 popup:Hide()
 tinsert(UISpecialFrames, "UGotTimeFrame") -- close with Escape
 
-local subtitle = popup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+-- Spellbook parchment instead of the dark inset, like the main window
+local parchment = popup:CreateTexture(nil, "BACKGROUND", nil, 7)
+parchment:SetPoint("TOPLEFT", 2, -21)
+parchment:SetPoint("BOTTOMRIGHT", -2, 2)
+Book.SetArt(parchment, "spellbook-background-evergreen-right", 0.82, 0.72, 0.54, 1)
+if popup.Inset then
+	popup.Inset:Hide()
+end
+
+local subtitle = Book.CreateText(popup, Book.NAME_FONT)
 subtitle:SetPoint("TOPLEFT", hasPortrait and 70 or 16, -36)
 
 -- What the currently shown popup is about, so the buttons know what to record
@@ -63,14 +73,15 @@ local function GetRow(i)
 	row:SetPoint("TOPLEFT", 20, ROWS_TOP - (i - 1) * ROW_HEIGHT)
 	row:SetPoint("RIGHT", popup, "RIGHT", -20, 0)
 
-	row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	row.name = Book.CreateText(row, Book.TEXT_FONT)
 	row.name:SetPoint("LEFT")
 
 	row.plus10 = SmallButton(row, "++", 36)
 	row.plus10:SetPoint("RIGHT")
 	row.plus1 = SmallButton(row, "+", 28)
 	row.plus1:SetPoint("RIGHT", row.plus10, "LEFT", -2, 0)
-	row.count = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	row.count = Book.CreateText(row, Book.NAME_FONT)
+	row.count:SetJustifyH("CENTER")
 	row.count:SetWidth(36)
 	row.count:SetPoint("RIGHT", row.plus1, "LEFT", -4, 0)
 	row.minus = SmallButton(row, "-", 28)
