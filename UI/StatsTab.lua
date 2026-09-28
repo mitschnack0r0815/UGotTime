@@ -50,7 +50,8 @@ end
 
 local levelHeader = Book.CreateHeader(left)
 
-local xpBar = ns.CreateXPBar(left)
+local xpBar = ns.CreateXPBar(left, nil, 10)
+xpBar.alwaysShowText = true
 xpBar:SetPoint("TOPLEFT", CONTENT_X, -100)
 xpBar:SetPoint("RIGHT", -Book.PAGE_MARGIN, 0)
 
