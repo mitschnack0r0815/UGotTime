@@ -5,11 +5,6 @@ local onFlight = false
 local flightReps        -- reps saved during the current flight, announced on landing
 local waitingForSave = false -- landed before the popup was saved
 
--- Remember where the player chose to fly
-hooksecurefunc("TakeTaxiNode", function(index)
-	destination = TaxiNodeName(index)
-end)
-
 function ns.ShowFlightPopup(source)
 	ns.ShowPopup("Flight Workout!", destination and ("Heading to " .. destination), source or "flight")
 end
@@ -29,24 +24,37 @@ function ns.FlightWorkoutSaved(reps)
 	end
 end
 
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_CONTROL_LOST")
-frame:RegisterEvent("PLAYER_CONTROL_GAINED")
-frame:SetScript("OnEvent", function(_, event)
-	if event == "PLAYER_CONTROL_LOST" then
-		if UnitOnTaxi("player") then
-			onFlight = true
-			flightReps = nil
-			waitingForSave = false
-			ns.ShowFlightPopup()
-		end
-	elseif onFlight then -- landed
-		onFlight = false
-		if flightReps then
-			Announce(flightReps, false)
-			flightReps = nil
-		else
-			waitingForSave = true
-		end
+-- This client has no reliable events for taking off and landing (PLAYER_CONTROL_LOST/GAINED
+-- are gone), so check UnitOnTaxi once a second and right after picking a flight path
+local function CheckTaxi()
+	local onTaxi = UnitOnTaxi("player") and true or false
+	if onTaxi == onFlight then
+		return
 	end
+	onFlight = onTaxi
+	if onTaxi then -- took off
+		flightReps = nil
+		waitingForSave = false
+		ns.ShowFlightPopup()
+	elseif flightReps then -- landed
+		Announce(flightReps, false)
+		flightReps = nil
+	else
+		waitingForSave = true
+	end
+end
+
+-- Remember where the player chose to fly, and look for the take-off right away
+hooksecurefunc("TakeTaxiNode", function(index)
+	destination = TaxiNodeName(index)
+	C_Timer.After(0.5, CheckTaxi)
+	C_Timer.After(1.5, CheckTaxi)
+end)
+
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:SetScript("OnEvent", function()
+	-- Already flying after a /reload: don't show the popup again for this flight
+	onFlight = UnitOnTaxi("player") and true or false
+	C_Timer.NewTicker(1, CheckTaxi)
 end)
