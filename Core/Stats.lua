@@ -62,7 +62,7 @@ function ns.RecordWorkout(source, reps)
 	ns.UpdateXPBar()
 	ns.RefreshStatsTab()
 
-	-- Only workouts announce level ups, not XP edits in the Movements tab
+	-- Only workouts announce level ups, not XP edits in the Options tab
 	local levelAfter = ns.GetLevelInfo()
 	if levelAfter > levelBefore then
 		ns.AnnounceLevelUp(levelAfter)

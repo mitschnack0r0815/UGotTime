@@ -19,7 +19,7 @@ UI\Book.lua
 UI\Window.lua
 UI\XPBar.lua
 UI\StatsTab.lua
-UI\MovementsTab.lua
+UI\OptionsTab.lua
 UI\Popup.lua
 UI\MinimapButton.lua
 

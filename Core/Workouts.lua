@@ -28,7 +28,7 @@ function ns.GetAllExercises()
 	return list
 end
 
--- Movements that haven't been deleted (shown in the Movements tab)
+-- Movements that haven't been deleted (shown in the Options tab)
 function ns.GetExercises()
 	local list = {}
 	local deleted = ns.GetSettings().deleted
@@ -59,7 +59,7 @@ function ns.SetExerciseEnabled(key, enabled)
 	ns.GetSettings().disabled[key] = (not enabled) or nil
 end
 
--- XP per rep for a movement (ns.XP_PER_REP unless changed in the Movements tab)
+-- XP per rep for a movement (ns.XP_PER_REP unless changed in the Options tab)
 function ns.GetExerciseXP(key)
 	return ns.GetSettings().xp[key] or ns.XP_PER_REP
 end

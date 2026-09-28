@@ -2,7 +2,7 @@ local _, ns = ...
 local Book = ns.Book
 
 -- Main window, styled like the spellbook: an open book with one tab per panel (Stats,
--- Movements) along the bottom edge. Each file adds its own tab via ns.AddTab and fills
+-- Options) along the bottom edge. Each file adds its own tab via ns.AddTab and fills
 -- the tab's two pages.
 local window = CreateFrame("Frame", "UGotTimeMainFrame", UIParent,
 	Book.TemplateExists("PortraitFrameTemplate") and "PortraitFrameTemplate" or "BasicFrameTemplate")

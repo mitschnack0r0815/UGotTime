@@ -111,7 +111,7 @@ local function Finish(save)
 		if currentSource == "flight" then
 			ns.FlightWorkoutSaved(done)
 		elseif currentSource == "quest" then
-			ns.SayWorkout(done, "after " .. ns.QUESTS_PER_WORKOUT .. " quests", true)
+			ns.SayWorkout(done, "after " .. ns.GetQuestsPerWorkout() .. " quests", true)
 		end
 	end
 	-- Recorded after the workout message, so a level up is announced after it

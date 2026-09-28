@@ -1,12 +1,12 @@
 local _, ns = ...
 local Book = ns.Book
 
--- Movements tab (/ugt config). Left page: the movements as spellbook entries; click one to
+-- Options tab (/ugt config). Left page: the movements as spellbook entries; click one to
 -- enable or disable it, with buttons to edit its XP or delete it. Right page: XP bar toggle
 -- and adding workouts.
 local CONTENT_X = Book.PAGE_MARGIN + 12 -- left edge of page content, lined up with the headers
 
-local panel, tabIndex = ns.AddTab("Movements")
+local panel, tabIndex = ns.AddTab("Options")
 local left, right = panel.left, panel.right
 
 local Refresh -- defined below, entries and buttons call it after changes
@@ -167,32 +167,81 @@ end
 -- Right page: options and adding workouts
 ---------------------------------------------------------------------------
 
-Book.CreateHeader(right, "Options")
+Book.CreateHeader(right, "Settings")
+
+-- Checkbox with a label; onClick gets the new checked state
+local function Checkbox(label, y, onClick)
+	local check = CreateFrame("CheckButton", nil, right, "UICheckButtonTemplate")
+	check:SetSize(26, 26)
+	check:SetPoint("TOPLEFT", CONTENT_X - 4, y)
+	check:SetScript("OnClick", function(self)
+		onClick(self:GetChecked() and true or false)
+	end)
+	local text = Book.CreateText(check, Book.TEXT_FONT)
+	text:SetPoint("LEFT", check, "RIGHT", 4, 0)
+	text:SetText(label)
+	return check
+end
 
 -- Show/hide the always visible XP bar (the one in the Stats tab always shows)
-local xpBarCheck = CreateFrame("CheckButton", nil, right, "UICheckButtonTemplate")
-xpBarCheck:SetSize(26, 26)
-xpBarCheck:SetPoint("TOPLEFT", CONTENT_X - 4, -98)
-xpBarCheck:SetScript("OnClick", function(self)
-	ns.SetXPBarShown(self:GetChecked() and true or false)
+local xpBarCheck = Checkbox("Show XP bar on screen", -98, ns.SetXPBarShown)
+local sayCheck = Checkbox("Announce workouts in /say", -126, function(on)
+	ns.SetAnnounceOn("SAY", on)
+end)
+local partyCheck = Checkbox("Announce workouts in party chat", -154, function(on)
+	ns.SetAnnounceOn("PARTY", on)
 end)
 
-local xpBarLabel = Book.CreateText(xpBarCheck, Book.TEXT_FONT)
-xpBarLabel:SetPoint("LEFT", xpBarCheck, "RIGHT", 4, 0)
-xpBarLabel:SetText("Show XP bar on screen")
+-- "Workout after every [-] 5 [+] quests"
+local questLabel = Book.CreateText(right, Book.TEXT_FONT)
+questLabel:SetPoint("TOPLEFT", CONTENT_X, -196)
+questLabel:SetText("Workout after every")
+
+local questMinus = CreateFrame("Button", nil, right, "UIPanelButtonTemplate")
+questMinus:SetSize(24, 22)
+questMinus:SetPoint("LEFT", questLabel, "RIGHT", 8, 0)
+questMinus:SetText("-")
+
+local questCount = Book.CreateText(right, Book.NAME_FONT)
+questCount:SetWidth(32)
+questCount:SetJustifyH("CENTER")
+questCount:SetPoint("LEFT", questMinus, "RIGHT", 2, 0)
+
+local questPlus = CreateFrame("Button", nil, right, "UIPanelButtonTemplate")
+questPlus:SetSize(24, 22)
+questPlus:SetPoint("LEFT", questCount, "RIGHT", 2, 0)
+questPlus:SetText("+")
+
+local questsText = Book.CreateText(right, Book.TEXT_FONT)
+questsText:SetPoint("LEFT", questPlus, "RIGHT", 8, 0)
+questsText:SetText("quests")
+
+local function UpdateQuestSetting()
+	local count = ns.GetQuestsPerWorkout()
+	questCount:SetText(count)
+	questMinus:SetEnabled(count > ns.MIN_QUESTS_PER_WORKOUT)
+	questPlus:SetEnabled(count < ns.MAX_QUESTS_PER_WORKOUT)
+end
+
+local function ChangeQuests(delta)
+	ns.SetQuestsPerWorkout(ns.GetQuestsPerWorkout() + delta)
+	UpdateQuestSetting()
+end
+questMinus:SetScript("OnClick", function() ChangeQuests(-1) end)
+questPlus:SetScript("OnClick", function() ChangeQuests(1) end)
 
 local info = Book.CreateText(right, Book.SMALL_FONT)
-info:SetPoint("TOPLEFT", CONTENT_X, -136)
+info:SetPoint("TOPLEFT", CONTENT_X, -224)
 info:SetPoint("RIGHT", -Book.PAGE_MARGIN, 0)
 info:SetAlpha(0.8)
-info:SetText(("A workout pops up whenever you take a flight and after every %d quests."):format(ns.QUESTS_PER_WORKOUT))
+info:SetText("A workout also pops up whenever you take a flight.")
 
 local addHeader = Book.CreateSubHeader(right, "Add workout")
-addHeader:SetPoint("TOPLEFT", CONTENT_X, -186)
+addHeader:SetPoint("TOPLEFT", CONTENT_X, -256)
 addHeader:SetPoint("RIGHT", -Book.PAGE_MARGIN, 0)
 
 local nameLabel = Book.CreateText(right, Book.TEXT_FONT)
-nameLabel:SetPoint("TOPLEFT", CONTENT_X, -234)
+nameLabel:SetPoint("TOPLEFT", CONTENT_X, -304)
 nameLabel:SetText("Name")
 
 local nameBox = CreateFrame("EditBox", nil, right, "InputBoxTemplate")
@@ -235,6 +284,9 @@ end)
 
 function Refresh()
 	xpBarCheck:SetChecked(ns.IsXPBarShown())
+	sayCheck:SetChecked(ns.IsAnnounceOn("SAY"))
+	partyCheck:SetChecked(ns.IsAnnounceOn("PARTY"))
+	UpdateQuestSetting()
 
 	local list = ns.GetExercises()
 	local perPage = math.max(1, floor(listArea:GetHeight() / Book.ENTRY_HEIGHT))
@@ -264,6 +316,13 @@ function Refresh()
 end
 
 panel:SetScript("OnShow", Refresh)
+
+-- Called after a setting changes from outside the tab (e.g. /ugt quests)
+function ns.RefreshOptionsTab()
+	if panel:IsVisible() then
+		Refresh()
+	end
+end
 
 function ns.ToggleOptions()
 	ns.ToggleTab(tabIndex)
