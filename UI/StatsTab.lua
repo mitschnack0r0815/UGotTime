@@ -2,7 +2,7 @@ local _, ns = ...
 local Book = ns.Book
 
 -- Stats tab (/ugt stats). Left page: level, XP, prompts per trigger and the latest workouts.
--- Right page: reps per exercise.
+-- Right page: times and reps per exercise, all time or for one day (flipped with the pager).
 local ROW_HEIGHT = 20
 local CONTENT_X = Book.PAGE_MARGIN + 12 -- left edge of page content, lined up with the headers
 local COL_WIDTH = 70 -- width of each number column
@@ -129,10 +129,10 @@ end
 -- Right page: exercise table
 ---------------------------------------------------------------------------
 
-Book.CreateHeader(right, "Exercises")
+local tableHeader = Book.CreateHeader(right)
 
 local TABLE_TOP = -100
-local TABLE_BOTTOM = -470 -- rows stop above the page's bottom edge
+local TABLE_BOTTOM = -440 -- rows stop above the pager
 local MAX_ROWS = floor((TABLE_TOP - TABLE_BOTTOM) / ROW_HEIGHT) - 1
 
 Text(right, Book.SMALL_FONT, TABLE_TOP):SetText("Movement")
@@ -143,6 +143,67 @@ empty:SetAlpha(0.7)
 empty:SetText("No workouts yet.")
 
 local rows = {}
+
+-- Page 1 is all time, then one page per day with workouts, newest first.
+-- The selected day ("YYYY-MM-DD", nil for all time) is kept rather than the page number,
+-- so a new day showing up doesn't shift what's on screen.
+local days = {}
+local selectedDay
+local Refresh, pager
+
+pager = Book.CreatePager(right, function(delta)
+	local page = math.max(1, math.min(#days + 1, pager.current + delta))
+	selectedDay = days[page - 1]
+	Refresh()
+end)
+pager:EnableWheel(right)
+
+local function DayKey(t)
+	return date("%Y-%m-%d", t)
+end
+
+local function DayLabel(day)
+	if not day then
+		return "All time"
+	elseif day == DayKey(time()) then
+		return "Today"
+	elseif day == DayKey(time() - 86400) then
+		return "Yesterday"
+	end
+	local y, m, d = day:match("(%d+)-(%d+)-(%d+)")
+	return date("%A %d.%m.", time({ year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 12 }))
+end
+
+-- Days in the log that have at least one workout with reps, newest first
+local function CollectDays(log)
+	local list, seen = {}, {}
+	for i = #log, 1, -1 do
+		local entry = log[i]
+		if entry.reps and next(entry.reps) then
+			local day = DayKey(entry.time)
+			if not seen[day] then
+				seen[day] = true
+				tinsert(list, day)
+			end
+		end
+	end
+	table.sort(list, function(a, b) return a > b end)
+	return list
+end
+
+-- exercise key -> times and reps for day, summed from the log
+local function CountDay(log, day)
+	local times, reps = {}, {}
+	for _, entry in ipairs(log) do
+		if entry.reps and DayKey(entry.time) == day then
+			for key, count in pairs(entry.reps) do
+				times[key] = (times[key] or 0) + 1
+				reps[key] = (reps[key] or 0) + count
+			end
+		end
+	end
+	return times, reps
+end
 
 local function GetRow(i)
 	if not rows[i] then
@@ -165,7 +226,7 @@ end
 
 ---------------------------------------------------------------------------
 
-local function Refresh()
+function Refresh()
 	local db = ns.GetStats()
 	local names = {}
 	for _, ex in ipairs(ns.GetAllExercises()) do
@@ -188,10 +249,28 @@ local function Refresh()
 	end
 	RefreshRecent(db.log, names)
 
+	days = CollectDays(db.log)
+	local page = 1
+	for i, day in ipairs(days) do
+		if day == selectedDay then
+			page = i + 1
+		end
+	end
+	if page == 1 then
+		selectedDay = nil -- that day isn't in the log anymore (e.g. after a reset)
+	end
+	pager:Update(page, #days + 1)
+	tableHeader.Text:SetText(DayLabel(selectedDay))
+
+	local times, reps = db.times, db.reps
+	if selectedDay then
+		times, reps = CountDay(db.log, selectedDay)
+	end
+
 	-- Exercises that were done at least once; the last row sums up any that don't fit
 	local done = {}
 	for _, ex in ipairs(ns.GetAllExercises()) do
-		if db.times[ex.key] then
+		if times[ex.key] then
 			tinsert(done, ex)
 		end
 	end
@@ -204,8 +283,8 @@ local function Refresh()
 			row.reps:SetText("")
 		else
 			row.name:SetText(ex.name)
-			row.times:SetText(db.times[ex.key])
-			row.reps:SetText(db.reps[ex.key] or 0)
+			row.times:SetText(times[ex.key])
+			row.reps:SetText(reps[ex.key] or 0)
 		end
 		ShowRow(row, true)
 	end
