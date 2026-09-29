@@ -17,6 +17,8 @@ SlashCmdList["UGOTTIME"] = function(msg)
 			ns.GetQuestsPerWorkout(), ns.MIN_QUESTS_PER_WORKOUT, ns.MAX_QUESTS_PER_WORKOUT))
 	elseif msg == "stats" then
 		ns.ToggleStats()
+	elseif msg == "graph" then
+		ns.ToggleGraph()
 	elseif msg == "config" then
 		ns.ToggleOptions()
 	elseif msg == "minimap" then

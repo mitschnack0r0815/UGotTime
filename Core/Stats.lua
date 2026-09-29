@@ -61,6 +61,7 @@ function ns.RecordWorkout(source, reps)
 
 	ns.UpdateXPBar()
 	ns.RefreshStatsTab()
+	ns.RefreshGraphTab()
 
 	-- Only workouts announce level ups, not XP edits in the Options tab
 	local levelAfter = ns.GetLevelInfo()
@@ -83,6 +84,7 @@ function ns.ResetStats()
 	UGotTimeStats = nil
 	ns.UpdateXPBar()
 	ns.RefreshStatsTab()
+	ns.RefreshGraphTab()
 	print("U Got Time: stats reset.")
 end
 

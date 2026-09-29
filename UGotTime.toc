@@ -20,6 +20,7 @@ UI\Window.lua
 UI\XPBar.lua
 UI\StatsTab.lua
 UI\OptionsTab.lua
+UI\GraphTab.lua
 UI\Popup.lua
 UI\MinimapButton.lua
 

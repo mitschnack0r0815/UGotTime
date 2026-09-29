@@ -78,6 +78,7 @@ local MENU = {
 	{ title = "U Got Time" },
 	{ text = "Start workout", func = function() ns.ShowPopup("Workout!", nil, "manual") end },
 	{ text = "Stats", func = function() ns.ToggleStats() end },
+	{ text = "Graph", func = function() ns.ToggleGraph() end },
 	{ text = "Options", func = function() ns.ToggleOptions() end },
 	{ text = "Show XP bar", checked = function() return ns.IsXPBarShown() end,
 		func = function() ns.SetXPBarShown(not ns.IsXPBarShown()) end },
